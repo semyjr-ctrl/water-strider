@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Swan AR - Spatial Audio</title>
+    
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: white; }
+        model-viewer { width: 100vw; height: 90vh; --poster-color: transparent; }
+
+        .hotspot {
+            display: block;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            background-color: #007bff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        /* Active Green State */
+        .hotspot.is-playing {
+            background-color: #28a745;
+            box-shadow: 0 0 15px #28a745;
+            transform: scale(1.2);
+        }
+
+        .annotation {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            color: #333;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 6px 10px;
+            position: absolute;
+            transform: translate(20px, -10px);
+            white-space: nowrap;
+        }
+
+        .ui-panel { 
+            position: absolute; 
+            bottom: 20px; 
+            width: 100%; 
+            text-align: center; 
+            z-index: 10;
+        }
+        
+        .btn { 
+            background: #dc3545; 
+            color: white; 
+            border: none; 
+            padding: 12px 24px; 
+            border-radius: 30px; 
+            font-weight: bold; 
+            cursor: pointer;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <model-viewer id="ar-model" 
+        src="perons_tree_frog_v2.glb" 
+        ar 
+        ar-modes="webxr scene-viewer quick-look" 
+        camera-controls 
+        shadow-intensity="1">
+
+        <button class="hotspot" slot="hotspot-1" 
+            data-position="-0.333762942699392m 0.21693415704065272m 0.039492615377952456m" 
+            data-normal="-0.2839380165624051m 0.944542418636983m -0.164981278168178m"
+            onclick="initAndPlaySpatialAudio()">
+            <div class="annotation">TENAGOGERRIS EUPHROSYNE</div>
+        </button>
+
+    </model-viewer>
+
+    <div class="ui-panel">
+        <button class="btn" onclick="StopSpatialAudio()">Stop Sound</button>
+        <p style="margin-top: 10px;">Scan to view in AR and tap hotspot</p>
+    </div>
+
+    <script>
+        let audioContext;
+        let panner;
+        let source;
+
+        async function initAndPlaySpatialAudio() {
+            StopSpatialAudio(); 
+
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            // RESTORED PANNER SETTINGS
+            panner = audioContext.createPanner();
+            panner.panningModel = 'HRTF';
+            panner.distanceModel = 'inverse';
+            panner.refDistance = 1;
+            panner.maxDistance = 100;
+            panner.rolloffFactor = 1;
+
+            try {
+                // Ensure this filename matches your GitHub file EXACTLY
+                const response = await fetch('Noaudio.mp3');
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.loop = true;
+
+                source.connect(panner);
+                panner.connect(audioContext.destination);
+
+                source.start();
+
+                document.querySelector('.hotspot[slot="hotspot-1"]').classList.add('is-playing');
+                updateSpatialPosition();
+            } catch (err) {
+                console.error("Audio Load Error: ", err);
+                alert("Could not load audio. Check filename and GitHub upload.");
+            }
+        }
+
+        function StopSpatialAudio() {
+            if (source) {
+                source.stop();
+                source = null;
+                document.querySelector('.hotspot[slot="hotspot-1"]').classList.remove('is-playing');
+            }
+        }
+
+        function updateSpatialPosition() {
+            const modelViewer = document.querySelector('#ar-model');
+            function frame() {
+                if (panner && source) {
+                    const cameraOrbit = modelViewer.getCameraOrbit();
+                    panner.positionX.value = Math.sin(cameraOrbit.theta) * cameraOrbit.radius;
+                    panner.positionZ.value = Math.cos(cameraOrbit.theta) * cameraOrbit.radius;
+                    panner.positionY.value = Math.cos(cameraOrbit.phi) * cameraOrbit.radius;
+                    requestAnimationFrame(frame);
+                }
+            }
+            requestAnimationFrame(frame);
+        }
+    </script>
+</body>
+</html>
